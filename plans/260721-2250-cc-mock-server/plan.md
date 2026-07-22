@@ -3,7 +3,7 @@ title: "CC Mock Server"
 status: completed
 created: 2026-07-21
 updated: 2026-07-22
-result: "phases 1-8 + init done; 288 tests pass. SSE capture/replay UAT'd through the CLI."
+result: "phases 1-9 + init done; 304 tests pass. Agent-composed SSE UAT'd through the CLI."
 mode: tdd
 source: docs/brainstorm-cc-mock-server-2026-07-21.md
 review: validate + red-team applied (2026-07-22)
@@ -70,7 +70,7 @@ Chọn per-request bằng config `agent_mode`:
 ### D10. Streaming / SSE (Phase 8)
 LLM API (OpenAI/Anthropic) stream SSE mặc định → mock buffered không chạy qua stream-handling code của app. Scope Phase 8:
 - **Làm**: detect `text/event-stream`; **capture-on-pass-through** (tee: forward chunk cho app đồng thời buffer để record); record raw SSE (là text → lưu string, `is_stream=true`); replay re-emit SSE body với content-type đúng + optional `stream_delay` giữa events.
-- **Defer (priority 3)**: agent-composed stream (respond nhận `{"chunks":[...]}`).
+- **Phase 9 (priority 3)**: agent-composed stream — agent respond `{"stream":true,"chunks":[...]}` với `chunks` là list SSE event strings **đã framed sẵn** (direction B: agent-agnostic, cc-mock chỉ `frame_sse_events` nối `\n\n`, KHÔNG hiểu payload → hỗ trợ cả OpenAI/Anthropic/bất kỳ). Emitted qua injected-response path (1 frame, `stream_delay` no-op như replay), recorded `is_stream=true` → replayable. **Atomic**: tất cả chunks trong 1 respond, KHÔNG real-time.
 - **Cấm**: real-time agent-token-streaming (rabbit hole, giá trị test thấp).
 - **Lý do dùng pass-through-capture, KHÔNG pending**: pending giữ connection chờ agent rồi mới stream → xung đột bản chất long-lived. Pass-through né hẳn vấn đề contract — app chạm API thật 1 lần, cc-mock tee + record, lần sau replay.
 - Matcher KHÔNG đụng (match trên request JSON). Nếu mitmproxy stream-delay cần plumbing sâu → document blocker, không fake (như HTTPS phase 6).
@@ -117,6 +117,7 @@ Request pipeline priority (intercepted flows):
 | 6 | Proxy & Mode Router | P1 | 2,3,4,5 | phase-06-proxy-router.md |
 | 7 | Control API & CLI | P2 | 6 | phase-07-control-cli.md |
 | 8 | Streaming / SSE | P2 | 6 | phase-08-streaming.md |
+| 9 | Agent-composed SSE stream | P3 | 5,8 | phase-09-agent-stream.md |
 
 ## Tech Stack
 

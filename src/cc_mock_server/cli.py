@@ -251,6 +251,30 @@ def cmd_deselect(args: argparse.Namespace) -> int:
 
 
 def cmd_respond(args: argparse.Namespace) -> int:
+    status = args.status if args.status is not None else 200
+    chunks = getattr(args, "chunk", None)
+
+    # D10 phase 9: `--chunk` (repeatable) switches respond to an
+    # agent-composed SSE stream (direction B: chunks are pre-framed event
+    # strings joined verbatim). Mutually exclusive with `--json`.
+    if chunks:
+        if args.json is not None:
+            print("cc-mock: use either --json or --chunk, not both", file=sys.stderr)
+            return 1
+        payload = {
+            "request_id": args.request_id,
+            "status": status,
+            "stream": True,
+            "chunks": chunks,
+        }
+        return _request(args, "POST", "/mock/respond", json=payload)
+
+    if args.json is None:
+        print(
+            "cc-mock: respond requires --json (a body) or --chunk (an SSE stream event)",
+            file=sys.stderr,
+        )
+        return 1
     try:
         body = json.loads(args.json)
     except json.JSONDecodeError as exc:
@@ -258,7 +282,7 @@ def cmd_respond(args: argparse.Namespace) -> int:
         return 1
     payload = {
         "request_id": args.request_id,
-        "status": args.status if args.status is not None else 200,
+        "status": status,
         "body": body,
     }
     return _request(args, "POST", "/mock/respond", json=payload)

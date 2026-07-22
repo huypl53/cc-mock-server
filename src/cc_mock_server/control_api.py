@@ -63,6 +63,12 @@ class RespondRequest(BaseModel):
     body: Any = None
     headers: Optional[dict[str, str]] = None
     content_type: Optional[str] = None
+    #: D10 phase 9 (agent-composed SSE, direction B): when `chunks` is
+    #: present (a list of pre-framed SSE event strings) the response is a
+    #: `text/event-stream` built by joining them verbatim; `body` is ignored.
+    #: `stream` is an explicit intent flag -- true without `chunks` is a 400.
+    stream: bool = False
+    chunks: Optional[list[str]] = None
 
 
 class ConfigUpdateRequest(BaseModel):
@@ -199,12 +205,17 @@ def create_control_api(application: Application) -> FastAPI:
         # SAME event loop as every pending future (D1) -- the `loop=`
         # cross-thread bridge documented on `AgentHandler.respond` is only
         # for a future where uvicorn is forced onto a separate thread.
+        if body.stream and body.chunks is None:
+            raise HTTPException(
+                status_code=400, detail="a stream response requires a 'chunks' list"
+            )
         resolved = application.agent_handler.respond(
             body.request_id,
             body.status,
             body.body,
             headers=body.headers,
             content_type=body.content_type,
+            chunks=body.chunks,
         )
         if not resolved:
             raise HTTPException(

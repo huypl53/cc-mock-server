@@ -274,8 +274,23 @@ COMMANDS: tuple[CommandSpec, ...] = (
             ParamSpec(
                 name="json",
                 flag="--json",
-                required=True,
-                help='JSON response body, e.g. \'{"result": "ok"}\'.',
+                help=(
+                    'JSON response body, e.g. \'{"result": "ok"}\'. Required unless '
+                    "you are answering with --chunk (an SSE stream)."
+                ),
+            ),
+            ParamSpec(
+                name="chunk",
+                flag="--chunk",
+                append=True,
+                help=(
+                    "A single PRE-FRAMED SSE event string, e.g. 'data: {\"delta\":\"hi\"}' "
+                    "or the OpenAI 'data: [DONE]' sentinel. Repeatable; passing any "
+                    "--chunk answers with an agent-composed text/event-stream response "
+                    "(D10) built by joining the chunks verbatim (cc-mock never reframes "
+                    "them, so you supply the exact wire shape -- OpenAI or Anthropic "
+                    "`event:` events alike). Mutually exclusive with --json."
+                ),
             ),
         ),
         example='cc-mock respond --request-id 3fa2c1 --status 200 --json \'{"result": "ok"}\'',
@@ -283,7 +298,11 @@ COMMANDS: tuple[CommandSpec, ...] = (
         error_codes=("404 unknown or already-resolved request_id",),
         workflow_note=(
             "Workflow: poll `pending` to discover in-flight requests, then call "
-            "`respond` with the same `request_id` for each one you want to answer."
+            "`respond` with the same `request_id` for each one you want to answer. "
+            "For a streaming (SSE) endpoint, answer with one or more --chunk instead "
+            "of --json: e.g. `respond --request-id ID --chunk 'data: {\"delta\":\"hi\"}' "
+            "--chunk 'data: [DONE]'`. The response is recorded as a stream and replays "
+            "identically without you being called again."
         ),
     ),
     CommandSpec(

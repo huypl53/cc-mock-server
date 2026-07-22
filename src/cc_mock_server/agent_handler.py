@@ -249,6 +249,7 @@ class AgentHandler:
         *,
         headers: Optional[Mapping[str, str]] = None,
         content_type: Optional[str] = None,
+        chunks: Optional[list[str]] = None,
         loop: Optional[asyncio.AbstractEventLoop] = None,
     ) -> bool:
         """Resolve the pending future for `request_id`. Returns False if
@@ -266,7 +267,7 @@ class AgentHandler:
         if pending is None:
             return False
 
-        response = self._make_response(status, body, headers, content_type)
+        response = self._make_response(status, body, headers, content_type, chunks=chunks)
 
         def _resolve() -> None:
             if not pending.future.done():
@@ -326,8 +327,18 @@ class AgentHandler:
         if not isinstance(data, dict):
             raise ValueError("agent JSON response must be an object")
         status_code = data.get("status_code", data.get("status", 200))
+        # D10 phase 9 (agent-composed SSE, direction B): `chunks` (a list of
+        # pre-framed SSE event strings) is the authoritative streaming
+        # signal; `stream: true` without `chunks` is an explicit mistake.
+        chunks = data.get("chunks")
+        if data.get("stream") and chunks is None:
+            raise ValueError("a stream response requires a 'chunks' list")
         return self._make_response(
-            status_code, data.get("body", {}), data.get("headers"), data.get("content_type")
+            status_code,
+            data.get("body", {}),
+            data.get("headers"),
+            data.get("content_type"),
+            chunks=chunks,
         )
 
     def _make_response(
@@ -336,7 +347,22 @@ class AgentHandler:
         body: Any,
         headers: Optional[Mapping[str, str]],
         content_type: Optional[str],
+        *,
+        chunks: Optional[list[str]] = None,
     ) -> Response:
+        # D10 phase 9: an agent-composed SSE stream -- `chunks` present (a
+        # list of pre-framed event strings) short-circuits the body path
+        # entirely; cc-mock joins them verbatim (agent-agnostic, direction B).
+        if chunks is not None:
+            if not isinstance(chunks, list) or not all(isinstance(item, str) for item in chunks):
+                raise ValueError("stream 'chunks' must be a list of strings")
+            return Response.from_chunks(
+                chunks,
+                status_code=int(status_code),
+                headers=dict(headers or {}),
+                content_type=content_type,
+            )
+
         headers_dict = dict(headers or {})
 
         if body is None:

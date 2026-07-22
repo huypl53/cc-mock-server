@@ -155,9 +155,28 @@ default. cc-mock captures these on **pass-through** and replays them:
   nothing buffered ahead of the client) while the full body is recorded
   with `is_stream: true`. On by default; disable with `capture_streams:
   false` in YAML config.
-- **Replay:** a matched streamed recording is re-emitted with the correct
-  `text/event-stream` content-type and framing (`data: ...\n\n`,
-  `[DONE]`), without contacting the origin.
+- **Agent-composed (no origin needed):** an agent can *compose* a stream
+  directly instead of capturing a real one -- answer a pending request with
+  one or more SSE events:
+
+  ```bash
+  cc-mock respond --request-id <id> \
+    --chunk 'data: {"choices":[{"delta":{"content":"Hel"}}]}' \
+    --chunk 'data: {"choices":[{"delta":{"content":"lo"}}]}' \
+    --chunk 'data: [DONE]'
+  ```
+
+  Each `--chunk` is a **pre-framed** SSE event; cc-mock joins them verbatim
+  (it never reframes them) into a `text/event-stream` response, so you
+  supply the exact wire shape -- OpenAI (`data:` + `[DONE]`) or Anthropic
+  (named `event:` events) alike. In sync mode the callback returns the same
+  shape as an envelope: `{"stream": true, "chunks": [...]}`. It is recorded
+  like any live response and replays identically. This is atomic (you send
+  all chunks in one `respond`); real-time token-by-token streaming from the
+  agent is deliberately not supported.
+- **Replay:** a matched streamed recording (captured OR agent-composed) is
+  re-emitted with the correct `text/event-stream` content-type and framing
+  (`data: ...\n\n`, `[DONE]`), without contacting the origin or the agent.
 - **`--stream-delay <seconds>`** is accepted and validated for
   forward-compatibility, but is currently a **documented no-op for
   replay**: mitmproxy sends an injected/replayed body as a single frame
@@ -166,10 +185,10 @@ default. cc-mock captures these on **pass-through** and replays them:
   module docstring for the source-cited mitmproxy limitation. Capture-side
   TTFT is real and unaffected.
 
-Still out of scope here: **agent-composed** streams (the pending/`respond`
-agent returning `{"chunks": [...]}`) and real-time token streaming from the
-agent. HTTP/2 upstreams are untested (the integration suite uses HTTP/1.1
-chunked SSE); treat h2 SSE capture as a follow-up.
+Still out of scope here: real-time token-by-token streaming from the agent
+(agent-composed streams are atomic -- see above). HTTP/2 upstreams are
+untested (the integration suite uses HTTP/1.1 chunked SSE); treat h2 SSE
+capture as a follow-up.
 
 ## Out of scope (v1)
 

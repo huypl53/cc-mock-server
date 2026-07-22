@@ -177,6 +177,40 @@ class Response(BaseModel):
             is_stream=is_stream,
         )
 
+    @classmethod
+    def from_chunks(
+        cls,
+        chunks: list[str],
+        *,
+        status_code: int = 200,
+        headers: Optional[dict[str, str]] = None,
+        content_type: Optional[str] = None,
+    ) -> "Response":
+        """Build an agent-composed SSE streaming `Response` from pre-framed
+        event strings (D10 phase 9, direction B).
+
+        `chunks` are joined verbatim with the SSE blank-line separator via
+        `streaming.frame_sse_events` -- cc-mock never inspects or reframes
+        their contents, so any provider's wire shape round-trips (OpenAI
+        `data: ...`/`[DONE]`, Anthropic named `event: ...` events, ...).
+        `content_type` defaults to `text/event-stream` and is mirrored into
+        `headers` unless the caller already set a content-type header.
+        """
+        from cc_mock_server import streaming  # local: streaming is a leaf module
+
+        resolved_type = content_type or "text/event-stream"
+        headers_dict = dict(headers or {})
+        if not any(key.lower() == "content-type" for key in headers_dict):
+            headers_dict["content-type"] = resolved_type
+        return cls(
+            status_code=status_code,
+            headers=headers_dict,
+            body=streaming.frame_sse_events(chunks).decode("utf-8"),
+            is_json=False,
+            content_type=resolved_type,
+            is_stream=True,
+        )
+
     def decoded_body(self) -> bytes:
         """Return the original raw bytes for `body` (inverse of `from_raw`)."""
         return decode_body(self.body, self.content_type)
