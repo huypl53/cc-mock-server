@@ -22,7 +22,29 @@ pytest
 This installs the `cc-mock` console script (see `[project.scripts]` in
 `pyproject.toml`).
 
-For system-wide use, install the CLI with pipx:
+### With uv / uvx (no manual venv)
+
+The console script is `cc-mock` but the distribution is `cc-mock-server`, so
+`uvx` needs `--from` to bridge the two.
+
+```bash
+# One-off / try it without installing anything (ephemeral, cached env):
+uvx --from git+https://github.com/huypl53/cc-mock-server.git cc-mock --agent-help
+uvx --from git+https://github.com/huypl53/cc-mock-server.git cc-mock start \
+  --filter-mode whitelist --filter '*.openai.com'
+
+# Recommended for real use -- install once, get `cc-mock` on your PATH
+# (like pipx; a long-running proxy + many pending/respond calls don't want
+# to re-resolve per invocation):
+uv tool install git+https://github.com/huypl53/cc-mock-server.git
+cc-mock --agent-help          # now directly on PATH
+uv tool upgrade cc-mock-server   # pull a newer version later
+```
+
+From a local checkout, `uvx --from . cc-mock ...` or `uv tool install .`
+work the same way.
+
+### With pipx
 
 ```bash
 pipx install git+https://github.com/huypl53/cc-mock-server.git
@@ -37,6 +59,12 @@ managed `CLAUDE.md` block, so the agent knows the poll→respond mocking loop):
 cc-mock init            # global: ~/.claude/skills/cc-mock + ~/.claude/CLAUDE.md
 cc-mock init project    # this repo: ./.claude/skills/cc-mock + ./CLAUDE.md
 ```
+
+> The generated skill/CLAUDE.md tell the agent to run bare `cc-mock pending` /
+> `cc-mock respond`, so `cc-mock` must be on PATH. Use `uv tool install` (or
+> `pipx install`) rather than per-call `uvx` for the Claude Code workflow. With
+> uv you can also run the installer itself once via
+> `uvx --from git+https://github.com/huypl53/cc-mock-server.git cc-mock init`.
 
 Re-running is idempotent (the managed block is replaced in place, never
 duplicated). Restart Claude Code afterwards to pick up the skill. In
