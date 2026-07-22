@@ -150,6 +150,11 @@ class Response(BaseModel):
     body: str = ""
     is_json: bool = False
     content_type: Optional[str] = None
+    #: True for a captured/replayed Server-Sent Events stream (D10, phase
+    #: 8). SSE bodies are always text (`text/event-stream` matches D8's
+    #: text-safe rule), so this never changes how `body` is encoded -- it's
+    #: purely a marker read by the streaming-replay path.
+    is_stream: bool = False
 
     @classmethod
     def from_raw(
@@ -159,6 +164,7 @@ class Response(BaseModel):
         headers: Optional[dict[str, str]] = None,
         raw_body: bytes = b"",
         content_type: Optional[str] = None,
+        is_stream: bool = False,
     ) -> "Response":
         """Build a `Response`, encoding `raw_body` per D8 content-type rules."""
         body, is_json = encode_body(raw_body, content_type)
@@ -168,6 +174,7 @@ class Response(BaseModel):
             body=body,
             is_json=is_json,
             content_type=content_type,
+            is_stream=is_stream,
         )
 
     def decoded_body(self) -> bytes:

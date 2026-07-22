@@ -3,8 +3,7 @@ title: "CC Mock Server"
 status: completed
 created: 2026-07-21
 updated: 2026-07-22
-completed: 2026-07-22
-result: "all 7 phases done; 243 tests pass"
+result: "phases 1-8 + init done; 288 tests pass. SSE capture/replay UAT'd through the CLI."
 mode: tdd
 source: docs/brainstorm-cc-mock-server-2026-07-21.md
 review: validate + red-team applied (2026-07-22)
@@ -68,6 +67,14 @@ Chọn per-request bằng config `agent_mode`:
 - `matcher.body_structure` chỉ áp cho JSON; non-JSON bỏ qua body tie-break.
 - Content-type không support cho compose → `pass_through` (state rõ).
 
+### D10. Streaming / SSE (Phase 8)
+LLM API (OpenAI/Anthropic) stream SSE mặc định → mock buffered không chạy qua stream-handling code của app. Scope Phase 8:
+- **Làm**: detect `text/event-stream`; **capture-on-pass-through** (tee: forward chunk cho app đồng thời buffer để record); record raw SSE (là text → lưu string, `is_stream=true`); replay re-emit SSE body với content-type đúng + optional `stream_delay` giữa events.
+- **Defer (priority 3)**: agent-composed stream (respond nhận `{"chunks":[...]}`).
+- **Cấm**: real-time agent-token-streaming (rabbit hole, giá trị test thấp).
+- **Lý do dùng pass-through-capture, KHÔNG pending**: pending giữ connection chờ agent rồi mới stream → xung đột bản chất long-lived. Pass-through né hẳn vấn đề contract — app chạm API thật 1 lần, cc-mock tee + record, lần sau replay.
+- Matcher KHÔNG đụng (match trên request JSON). Nếu mitmproxy stream-delay cần plumbing sâu → document blocker, không fake (như HTTPS phase 6).
+
 ### D9. Models up-front (tránh churn)
 Định nghĩa toàn bộ model surface (`Request`, `Response`, `Recording`, `HandlerResult`, `PendingRequest`) ngay phase 2 `models.py` để TDD không phải rewrite test phase sớm.
 
@@ -109,6 +116,7 @@ Request pipeline priority (intercepted flows):
 | 5 | Agent Handler | P1 | 1,2 | phase-05-agent-handler.md |
 | 6 | Proxy & Mode Router | P1 | 2,3,4,5 | phase-06-proxy-router.md |
 | 7 | Control API & CLI | P2 | 6 | phase-07-control-cli.md |
+| 8 | Streaming / SSE | P2 | 6 | phase-08-streaming.md |
 
 ## Tech Stack
 
@@ -137,7 +145,7 @@ Request pipeline priority (intercepted flows):
 
 ## Out of Scope (v1)
 
-- WebSocket / streaming/SSE mocking (**note prominent ở README**: OpenAI/Anthropic stream by default → mitmproxy buffer full body, high memory).
+- WebSocket mocking (SSE `text/event-stream` streaming IS supported — phase 8/D10: pass-through tee-capture + replay; agent-composed streams + real-time token streaming remain deferred/forbidden).
 - Auth/multi-tenant cho control API (chỉ bind loopback).
 - Web dashboard UI.
 - Recording auto-cleanup/rotation (note hard cap dù defer — tránh cạn inode).

@@ -163,6 +163,18 @@ COMMANDS: tuple[CommandSpec, ...] = (
                 default="recordings",
                 help="Directory recordings are read from / written to.",
             ),
+            ParamSpec(
+                name="stream_delay",
+                flag="--stream-delay",
+                type="float",
+                default="0.0",
+                help=(
+                    "Seconds between SSE events when replaying a captured stream (D10). "
+                    "Best-effort: see server.py's module docstring for the documented "
+                    "mitmproxy limitation that currently makes this a content-correct, "
+                    "no-timing-effect no-op for injected/replayed responses."
+                ),
+            ),
         ),
         example=(
             "cc-mock start --proxy-port 8080 --control-port 8081 --mode live "

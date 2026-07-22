@@ -74,6 +74,16 @@ class Config(BaseModel):
     filter_mode: FilterMode = FilterMode.WHITELIST
     filter_domains: list[str] = Field(default_factory=list)
     recordings_dir: Path = Path("recordings")
+    #: D10/phase 8: tee-capture a `text/event-stream` response while it is
+    #: being passed through to the real upstream (see `router.py`'s
+    #: `should_capture_stream`/`server.py`'s `responseheaders`/`response`).
+    capture_streams: bool = True
+    #: D10/phase 8: seconds to wait between SSE events when *replaying* a
+    #: captured stream. Accepted/validated here and threaded through the
+    #: CLI (`--stream-delay`), but see `server.py`'s module docstring for
+    #: the documented mitmproxy blocker that currently makes this a no-op
+    #: for the injected-response replay path (content-correct fallback).
+    stream_delay: float = 0.0
 
     @field_validator("agent_timeout")
     @classmethod
@@ -94,6 +104,13 @@ class Config(BaseModel):
     def _max_pending_must_be_positive(cls, value: int) -> int:
         if value <= 0:
             raise ValueError("max_pending must be > 0")
+        return value
+
+    @field_validator("stream_delay")
+    @classmethod
+    def _stream_delay_non_negative(cls, value: float) -> float:
+        if value < 0:
+            raise ValueError("stream_delay must be >= 0")
         return value
 
     @field_validator("filter_domains")

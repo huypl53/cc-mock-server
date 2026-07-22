@@ -127,6 +127,7 @@ def _build_start_config(args: argparse.Namespace) -> Config:
         "timeout_fallback": args.timeout_fallback,
         "min_confidence": args.min_confidence,
         "recordings_dir": args.recordings,
+        "stream_delay": args.stream_delay,
     }
     return load_config(cli_overrides=cli_overrides)
 

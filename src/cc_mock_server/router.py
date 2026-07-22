@@ -44,8 +44,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Callable, Iterable, Optional
+from typing import Callable, Iterable, Mapping, Optional
 
+from cc_mock_server import streaming
 from cc_mock_server.agent_handler import AgentHandler, ClientDisconnected
 from cc_mock_server.config import Config
 from cc_mock_server.enums import Mode, ReplayMissStrategy
@@ -97,6 +98,14 @@ class ModeRouter:
         self._recorder = recorder
         self._match_fn = match_fn
         self._fuzzy_key_fn = fuzzy_key_fn
+
+    @property
+    def config(self) -> Config:
+        """Exposed so `server.py`'s `MockAddon` (which only receives
+        `router` + `domain_filter`, D1's composition root in `app.py` is
+        not itself touched by phase 8) can read `capture_streams` without
+        a second config instance."""
+        return self._config
 
     async def route(
         self, request: Request, on_disconnect: Optional[asyncio.Event] = None
@@ -181,3 +190,35 @@ class ModeRouter:
         # semantics), so `recorder.list()`/`snapshot()` reflect the
         # backfilled key from this point on.
         recording.metadata.fuzzy_key = self._fuzzy_key_fn(request)
+
+    # ------------------------------------------------------------------
+    # streaming / SSE (D10, phase 8): pass-through TEE capture, NOT the
+    # pending/agent path above -- pending holds the connection open
+    # waiting for an agent reply, which is fundamentally incompatible with
+    # a long-lived stream; pass-through instead lets the app hit the real
+    # upstream once, `server.py` tees the bytes to the client while
+    # buffering them, and this module records the result afterwards.
+    # ------------------------------------------------------------------
+
+    def should_capture_stream(self, response_headers: Mapping[str, str]) -> bool:
+        """Should `server.py` tee-capture this pass-through response?
+
+        True only when `capture_streams` is enabled AND the real
+        upstream's response headers say `text/event-stream` (D10). Reading
+        `self._config.capture_streams` here (rather than `server.py`
+        reading `Config` directly) keeps the "what counts as a capturable
+        stream" decision in one place, next to the rest of the routing
+        policy.
+        """
+        return self._config.capture_streams and streaming.is_sse(response_headers)
+
+    async def save_stream_recording(self, request: Request, response: Response) -> None:
+        """Persist a captured pass-through SSE exchange (D10).
+
+        Mirrors `_handle_live`'s `_save_recording` (masking + fuzzy_key
+        backfill) exactly -- the only difference is which pipeline branch
+        calls it: this one is reached from `server.py`'s `response()` hook
+        once an SSE body has fully relayed through pass-through, never from
+        the live-agent/pending path.
+        """
+        await self._save_recording(request, response)

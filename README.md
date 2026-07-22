@@ -144,15 +144,38 @@ DO want to intercept over HTTPS, your client must trust the CA certificate
    cert-pinned clients talking to out-of-scope hosts keep working
    unmodified.
 
+## Streaming / SSE (`text/event-stream`)
+
+Many third-party AI APIs (OpenAI, Anthropic) stream responses as SSE by
+default. cc-mock captures these on **pass-through** and replays them:
+
+- **Capture (live/pass-through):** when a pass-through response comes back
+  `Content-Type: text/event-stream`, cc-mock *tees* it -- every upstream
+  chunk is relayed to your app the instant it arrives (TTFT preserved,
+  nothing buffered ahead of the client) while the full body is recorded
+  with `is_stream: true`. On by default; disable with `capture_streams:
+  false` in YAML config.
+- **Replay:** a matched streamed recording is re-emitted with the correct
+  `text/event-stream` content-type and framing (`data: ...\n\n`,
+  `[DONE]`), without contacting the origin.
+- **`--stream-delay <seconds>`** is accepted and validated for
+  forward-compatibility, but is currently a **documented no-op for
+  replay**: mitmproxy sends an injected/replayed body as a single frame
+  before the `response` hook can pace it, so replay emits the whole SSE
+  body at once (content-correct, no per-event pacing). See `server.py`'s
+  module docstring for the source-cited mitmproxy limitation. Capture-side
+  TTFT is real and unaffected.
+
+Still out of scope here: **agent-composed** streams (the pending/`respond`
+agent returning `{"chunks": [...]}`) and real-time token streaming from the
+agent. HTTP/2 upstreams are untested (the integration suite uses HTTP/1.1
+chunked SSE); treat h2 SSE capture as a follow-up.
+
 ## Out of scope (v1)
 
-- **WebSocket / streaming / SSE mocking.** Many third-party AI APIs (e.g.
-  OpenAI, Anthropic) stream responses by default; mitmproxy buffers the
-  full body before this proxy can inspect it, which means a streamed
-  response is held **fully in memory** before `cc-mock-server` ever sees
-  it. If you're mocking a streaming endpoint, either disable streaming on
-  the client (`stream: false`) or watch payload size closely -- there is
-  no chunked/incremental mocking support in v1.
+- **WebSocket mocking.** Only SSE (`text/event-stream`) streaming is
+  supported (see above); raw WebSocket upgrade traffic is not intercepted
+  or recorded.
 - Auth / multi-tenant support for the control API (it binds to loopback
   only by default -- see `control_bind`/`--control-host` above; `POST
   /mock/config` also refuses to set a non-loopback `agent_url`, D3).

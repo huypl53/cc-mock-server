@@ -15,3 +15,6 @@ recordings/
 
 # OS
 .DS_Store
+
+# Local agent tooling (ClaudeKit skills/agents scaffolded per-session)
+.claude/
