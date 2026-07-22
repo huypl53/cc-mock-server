@@ -266,6 +266,16 @@ class TestAgentHelp:
             assert f"`{command.name}`" in output
             assert command.example.split()[0] in output
 
+    def test_agent_help_documents_sync_callback_envelope(self, capsys):
+        # The sync-mode callback must return {status, body, ...}; returning a
+        # raw payload silently degrades to {}. --agent-help must warn about it.
+        exit_code = cli.main(["--agent-help"])
+        assert exit_code == 0
+        output = capsys.readouterr().out
+        assert "sync-mode callback contract" in output
+        assert '"body"' in output
+        assert "defaults to `{}`" in output  # the silent-drop pitfall
+
     def test_help_flag_exits_zero(self):
         with pytest.raises(SystemExit) as exc_info:
             cli.main(["--help"])

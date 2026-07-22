@@ -70,6 +70,30 @@ Run `cc-mock --agent-help` for the exhaustive, always-in-sync reference
 `--agent-timeout`, `--timeout-fallback`, `--min-confidence`,
 `--recordings`).
 
+## Agent transports: `pending` vs `sync`
+
+- **`pending`** (default): the app request blocks; you discover it with
+  `cc-mock pending`, then answer with `cc-mock respond` (the CLI wraps your
+  `--status`/`--json` into the response for you). This is the path an LLM
+  agent drives.
+- **`sync`** (`--agent-mode sync --agent-url <loopback-url>`): the proxy POSTs
+  the intercepted request to your callback and uses its JSON reply inline.
+
+**Sync callback contract.** Your callback MUST return a response *envelope*,
+not the raw payload:
+
+```json
+{"status": 201, "body": {"id": "ch_123"}, "headers": {}, "content_type": "application/json"}
+```
+
+Only `body` is required (`status` defaults to `200`; `status_code` is an alias
+for `status`). The proxy POSTs you `{request_id, method, url, headers, body,
+is_json, content_type}` with sensitive headers already masked.
+
+> **Pitfall:** the real payload goes under the `body` key. If you return your
+> payload at the top level (no `body` key), `body` defaults to `{}` and the app
+> silently receives an empty `{}` — your data is dropped.
+
 ## HTTPS: trusting the mitmproxy CA
 
 HTTPS interception (D7) only ever TLS-terminates domains that are actually

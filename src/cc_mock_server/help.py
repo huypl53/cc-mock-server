@@ -110,7 +110,11 @@ COMMANDS: tuple[CommandSpec, ...] = (
             ParamSpec(
                 name="agent_url",
                 flag="--agent-url",
-                help="Agent callback URL. Must be a loopback host (D3), e.g. http://127.0.0.1:9000/cb.",
+                help=(
+                    "Agent callback URL (loopback only, D3), e.g. http://127.0.0.1:9000/cb. "
+                    "In sync mode it must return the response ENVELOPE {status, body, ...} -- "
+                    "see the 'sync-mode callback contract' section of --agent-help."
+                ),
             ),
             ParamSpec(
                 name="agent_mode",
@@ -334,5 +338,33 @@ def render_agent_help() -> str:
         "2. Compose a JSON response for one of them.\n"
         "3. `cc-mock respond --request-id <id> --status <code> --json '<body>'` to unblock it.\n"
         "4. The resolved exchange is recorded automatically for later `replay`."
+    )
+    lines.append("")
+    lines.append("## sync-mode callback contract (agent_mode=sync)")
+    lines.append("")
+    lines.append(
+        "When you run with `--agent-mode sync --agent-url <url>`, the proxy POSTs the "
+        "intercepted request to `<url>` and uses that HTTP call's JSON reply as the "
+        "response INLINE (no `pending`/`respond` round-trip)."
+    )
+    lines.append("")
+    lines.append(
+        "Your callback MUST return a response ENVELOPE, not the raw payload:\n"
+        "  `{\"status\": <int, optional, default 200>, \"body\": <json>, "
+        "\"headers\": <object, optional>, \"content_type\": <str, optional>}`\n"
+        "(`status_code` is accepted as an alias for `status`.)"
+    )
+    lines.append("")
+    lines.append(
+        "PITFALL: the real response payload goes under the `body` key. If you return "
+        "your payload at the top level (no `body` key), `body` defaults to `{}` and the "
+        "app silently receives an empty `{}` -- your data is dropped. Request details "
+        "the proxy sends you: `{request_id, method, url, headers, body, is_json, "
+        "content_type}` (sensitive headers already masked)."
+    )
+    lines.append("")
+    lines.append(
+        "Example callback reply: `{\"status\": 201, \"body\": {\"id\": \"ch_123\"}}` -> "
+        "the app receives HTTP 201 with body `{\"id\": \"ch_123\"}`."
     )
     return "\n".join(lines)
