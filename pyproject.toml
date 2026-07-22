@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cc-mock-server"
-version = "0.1.0"
+version = "0.2.0"
 description = "Smart mocking proxy for AI coding agents: intercept third-party API calls, route to an agent or built-in handler, record, and replay via fuzzy match."
 readme = "README.md"
 requires-python = ">=3.12"
