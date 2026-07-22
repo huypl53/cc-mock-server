@@ -175,6 +175,28 @@ COMMANDS: tuple[CommandSpec, ...] = (
         ),
     ),
     CommandSpec(
+        name="init",
+        summary=(
+            "Install cc-mock into Claude Code: write the `cc-mock` skill and a "
+            "managed CLAUDE.md block (idempotent). Runs locally -- no control API."
+        ),
+        params=(
+            ParamSpec(
+                name="scope",
+                choices=("global", "project"),
+                optional_positional=True,
+                default="global",
+                help="global -> ~/.claude (default); project -> ./.claude + ./CLAUDE.md.",
+            ),
+        ),
+        example="cc-mock init  |  cc-mock init project",
+        response_shape="Prints the paths written (SKILL.md + CLAUDE.md).",
+        workflow_note=(
+            "Run once per machine (global) or per repo (project); re-running "
+            "replaces the managed block in place rather than duplicating it."
+        ),
+    ),
+    CommandSpec(
         name="status",
         summary="Print the current mode, agent config, filter, and pending/recordings counts.",
         params=(),

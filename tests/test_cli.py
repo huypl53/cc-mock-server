@@ -20,7 +20,9 @@ import json
 import pytest
 from pytest_httpserver import HTTPServer
 
-from cc_mock_server import cli, help as help_registry
+from pathlib import Path
+
+from cc_mock_server import cli, help as help_registry, installer
 from cc_mock_server.enums import AgentMode, FilterMode, Mode, ReplayMissStrategy, TimeoutFallback
 
 
@@ -280,6 +282,33 @@ class TestAgentHelp:
         with pytest.raises(SystemExit) as exc_info:
             cli.main(["--help"])
         assert exc_info.value.code == 0
+
+
+class TestInitCommand:
+    def test_init_default_global_writes_skill_and_claude_md(self, tmp_path, monkeypatch, capsys):
+        home, cwd = tmp_path / "home", tmp_path / "proj"
+        cwd.mkdir(parents=True)
+        monkeypatch.setattr(cli.Path, "home", classmethod(lambda cls: home))
+        monkeypatch.chdir(cwd)
+
+        exit_code = cli.main(["init"])
+
+        assert exit_code == 0
+        skill = home / ".claude" / "skills" / "cc-mock" / "SKILL.md"
+        assert skill.exists()
+        assert (home / ".claude" / "CLAUDE.md").read_text().count(installer.START_MARKER) == 1
+        out = capsys.readouterr().out
+        assert str(skill) in out
+
+    def test_init_project_scope_targets_cwd(self, tmp_path, monkeypatch):
+        home, cwd = tmp_path / "home", tmp_path / "proj"
+        cwd.mkdir(parents=True)
+        monkeypatch.setattr(cli.Path, "home", classmethod(lambda cls: home))
+        monkeypatch.chdir(cwd)
+
+        assert cli.main(["init", "project"]) == 0
+        assert (cwd / ".claude" / "skills" / "cc-mock" / "SKILL.md").exists()
+        assert (cwd / "CLAUDE.md").exists()
 
 
 class TestAgentHelpDriftGuard:

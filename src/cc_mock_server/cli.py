@@ -26,7 +26,10 @@ from urllib.parse import quote
 import httpx
 import uvicorn
 
+from pathlib import Path
+
 from cc_mock_server import help as help_registry
+from cc_mock_server import installer
 from cc_mock_server.app import build_application, shutdown
 from cc_mock_server.config import Config, load_config
 from cc_mock_server.control_api import create_control_api
@@ -181,6 +184,17 @@ def cmd_start(args: argparse.Namespace) -> int:
 # ----------------------------------------------------------------------------
 
 
+def cmd_init(args: argparse.Namespace) -> int:
+    """Install the cc-mock skill + CLAUDE.md block (local, no control API)."""
+    scope = getattr(args, "scope", None) or "global"
+    written = installer.install(scope=scope, home=Path.home(), cwd=Path.cwd())
+    print(f"cc-mock: installed into Claude Code ({scope} scope):")
+    for path in written:
+        print(f"  - {path}")
+    print("Restart Claude Code (or start a new session) to pick up the skill.")
+    return 0
+
+
 def _control_base_url(args: argparse.Namespace) -> str:
     host = getattr(args, "control_host", None) or "127.0.0.1"
     port = getattr(args, "control_port", None) or 8081
@@ -285,6 +299,9 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if args.command == "start":
         return cmd_start(args)
+
+    if args.command == "init":
+        return cmd_init(args)
 
     handler = _CLIENT_HANDLERS.get(args.command)
     if handler is None:  # pragma: no cover -- argparse already restricts choices

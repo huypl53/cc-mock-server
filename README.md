@@ -22,6 +22,28 @@ pytest
 This installs the `cc-mock` console script (see `[project.scripts]` in
 `pyproject.toml`).
 
+For system-wide use, install the CLI with pipx:
+
+```bash
+pipx install git+https://github.com/huypl53/cc-mock-server.git
+```
+
+## Use with Claude Code
+
+One command installs cc-mock into Claude Code (writes the `cc-mock` skill and a
+managed `CLAUDE.md` block, so the agent knows the poll→respond mocking loop):
+
+```bash
+cc-mock init            # global: ~/.claude/skills/cc-mock + ~/.claude/CLAUDE.md
+cc-mock init project    # this repo: ./.claude/skills/cc-mock + ./CLAUDE.md
+```
+
+Re-running is idempotent (the managed block is replaced in place, never
+duplicated). Restart Claude Code afterwards to pick up the skill. In
+`agent_mode=pending`, the Claude agent developing the app IS the agent that
+composes responses — it discovers blocked requests with `cc-mock pending` and
+answers with `cc-mock respond`.
+
 ## Quick start
 
 ```bash
