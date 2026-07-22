@@ -37,6 +37,7 @@ from pydantic import BaseModel
 from cc_mock_server.app import Application
 from cc_mock_server.config import is_loopback
 from cc_mock_server.enums import AgentMode, Mode, ReplayMissStrategy, TimeoutFallback
+from cc_mock_server.sanitize import mask_headers
 
 # ----------------------------------------------------------------------------
 # request bodies
@@ -173,13 +174,21 @@ def create_control_api(application: Application) -> FastAPI:
 
     @api.get("/mock/pending")
     async def list_pending() -> dict[str, Any]:
+        # The agent polls this endpoint, so it is a D3 secret-egress path
+        # exactly like the callback payload: mask sensitive headers before
+        # the request reaches the agent (never leak Authorization/cookie/etc).
+        def _dump(pending: Any) -> dict[str, Any]:
+            request = pending.request.model_dump()
+            request["headers"] = mask_headers(request.get("headers", {}))
+            return {
+                "request_id": pending.request_id,
+                "request": request,
+                "created_at": pending.created_at.isoformat(),
+            }
+
         return {
             "pending": [
-                {
-                    "request_id": pending.request_id,
-                    "request": pending.request.model_dump(),
-                    "created_at": pending.created_at.isoformat(),
-                }
+                _dump(pending)
                 for pending in application.agent_handler.pending.values()
             ]
         }

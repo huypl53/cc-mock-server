@@ -245,6 +245,40 @@ class TestPendingAndRespond:
         assert json.loads(resolved_response.body) == {"ok": 1}
 
     @pytest.mark.asyncio
+    async def test_pending_masks_sensitive_headers(
+        self, application: Application, client: httpx.AsyncClient
+    ):
+        # D3: the agent polls GET /mock/pending, so it is a secret-egress
+        # path -- Authorization/cookie must never reach the agent in clear.
+        request = make_request(
+            headers={
+                "Authorization": "Bearer secret123",
+                "Cookie": "session=abc",
+                "Accept": "*/*",
+            }
+        )
+        loop = asyncio.get_running_loop()
+        future: "asyncio.Future[Response]" = loop.create_future()
+        application.agent_handler.pending["req-mask"] = PendingRequest(
+            request_id="req-mask",
+            request=request,
+            future=future,
+            created_at=datetime.now(timezone.utc),
+        )
+
+        resp = await client.get("/mock/pending")
+        assert resp.status_code == 200
+        headers = resp.json()["pending"][0]["request"]["headers"]
+        assert headers["Authorization"] == "***"
+        assert headers["Cookie"] == "***"
+        assert headers["Accept"] == "*/*"  # non-sensitive untouched
+        # secret value absent anywhere in the serialized payload
+        assert "secret123" not in resp.text
+        assert "session=abc" not in resp.text
+
+        future.cancel()
+
+    @pytest.mark.asyncio
     async def test_respond_unknown_request_id_returns_404(self, client: httpx.AsyncClient):
         resp = await client.post(
             "/mock/respond", json={"request_id": "does-not-exist", "status": 200, "body": {}}
