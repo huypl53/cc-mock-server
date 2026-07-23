@@ -285,6 +285,52 @@ class TestPendingAndRespond:
         )
         assert resp.status_code == 404
 
+    @pytest.mark.asyncio
+    async def test_respond_without_id_auto_targets_sole_pending(
+        self, application: Application, client: httpx.AsyncClient
+    ):
+        loop = asyncio.get_running_loop()
+        future: "asyncio.Future[Response]" = loop.create_future()
+        application.agent_handler.pending["only-one"] = PendingRequest(
+            request_id="only-one",
+            request=make_request(),
+            future=future,
+            created_at=datetime.now(timezone.utc),
+        )
+
+        # No request_id in the body -- auto-target the single pending request.
+        resp = await client.post("/mock/respond", json={"status": 200, "body": {"ok": 1}})
+        assert resp.status_code == 200
+        assert resp.json() == {"request_id": "only-one", "resolved": True}
+
+        resolved = await asyncio.wait_for(future, timeout=1.0)
+        assert json.loads(resolved.body) == {"ok": 1}
+
+    @pytest.mark.asyncio
+    async def test_respond_without_id_no_pending_returns_404(self, client: httpx.AsyncClient):
+        resp = await client.post("/mock/respond", json={"status": 200, "body": {}})
+        assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_respond_without_id_multiple_pending_returns_409(
+        self, application: Application, client: httpx.AsyncClient
+    ):
+        loop = asyncio.get_running_loop()
+        for rid in ("req-a", "req-b"):
+            application.agent_handler.pending[rid] = PendingRequest(
+                request_id=rid,
+                request=make_request(),
+                future=loop.create_future(),
+                created_at=datetime.now(timezone.utc),
+            )
+
+        resp = await client.post("/mock/respond", json={"status": 200, "body": {}})
+        assert resp.status_code == 409
+        assert "req-a" in resp.text and "req-b" in resp.text
+
+        for pending in application.agent_handler.pending.values():
+            pending.future.cancel()
+
 
 # --------------------------------------------------------------------------
 # recordings

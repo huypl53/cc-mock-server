@@ -45,13 +45,23 @@ code. Answered exchanges are recorded and replayed later with no agent needed.
    `cc-mock start --mode live --agent-mode pending --filter "api.stripe.com" &`
 2. Run the app pointed at the proxy: `HTTP_PROXY=http://localhost:8080 <run app>`.
 3. The app's API call blocks. Discover it: `cc-mock pending`.
-4. Read the app code to learn the response shape it expects, then answer:
-   `cc-mock respond --request-id <id> --status 200 --json '<body>'`
+4. Read the app code to learn the response shape it expects, then answer.
+   Omit `--request-id` -- cc-mock auto-targets the one blocked request, so
+   this is a SINGLE command with no id to copy:
+   `cc-mock respond --status 200 --json '<body>'`
+   (Streaming/SSE endpoint? answer with `--chunk` instead of `--json`:
+   `cc-mock respond --chunk 'data: {"delta":"hi"}' --chunk 'data: [DONE]'`.)
 5. Once enough exchanges are recorded, replay them without answering again:
    `cc-mock mode replay` -- re-run the app; matching requests return recordings.
 
 ## Notes
 
+- Run each `cc-mock` step as ONE command. Don't capture ids/values into shell
+  variables across multiple lines (`ID=$(...)` then use `$ID`) -- omitting
+  `--request-id` removes the only reason you'd need to, and keeps every step a
+  single inline command that can't be mis-split by a bash-line hook.
+- Only pass `--request-id <id>` (from `pending`) when several requests are
+  blocked at once; with one blocked request you never need it.
 - Only domains in `--filter` are intercepted; everything else passes through to
   the real internet untouched.
 - `cc-mock --agent-help` prints the full command reference (params, examples,
@@ -69,7 +79,9 @@ When developing or testing code that calls a third-party HTTP API, prefer
 1. `cc-mock start --mode live --agent-mode pending --filter "<api-domain>" &`
 2. Run the app with `HTTP_PROXY=http://localhost:8080`.
 3. When a request blocks, `cc-mock pending` shows it; read the app code to learn
-   the expected response, then `cc-mock respond --request-id <id> --json '<body>'`.
+   the expected response, then answer with a single command (no id needed --
+   cc-mock auto-targets the blocked request): `cc-mock respond --json '<body>'`.
+   Avoid multi-line bash that assigns an id to a shell variable first.
 4. After recording enough exchanges, `cc-mock mode replay` serves them with no
    agent involvement.
 

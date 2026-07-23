@@ -261,13 +261,8 @@ def cmd_respond(args: argparse.Namespace) -> int:
         if args.json is not None:
             print("cc-mock: use either --json or --chunk, not both", file=sys.stderr)
             return 1
-        payload = {
-            "request_id": args.request_id,
-            "status": status,
-            "stream": True,
-            "chunks": chunks,
-        }
-        return _request(args, "POST", "/mock/respond", json=payload)
+        payload = {"status": status, "stream": True, "chunks": chunks}
+        return _request(args, "POST", "/mock/respond", json=_with_request_id(args, payload))
 
     if args.json is None:
         print(
@@ -280,12 +275,17 @@ def cmd_respond(args: argparse.Namespace) -> int:
     except json.JSONDecodeError as exc:
         print(f"cc-mock: invalid --json payload: {exc}", file=sys.stderr)
         return 1
-    payload = {
-        "request_id": args.request_id,
-        "status": status,
-        "body": body,
-    }
-    return _request(args, "POST", "/mock/respond", json=payload)
+    payload = {"status": status, "body": body}
+    return _request(args, "POST", "/mock/respond", json=_with_request_id(args, payload))
+
+
+def _with_request_id(args: argparse.Namespace, payload: dict[str, Any]) -> dict[str, Any]:
+    """Attach `request_id` only when the caller passed one. Omitting it lets
+    the control API auto-target the sole pending request (so an agent can
+    answer with a single inline command, no shell-variable plumbing)."""
+    if args.request_id is not None:
+        payload["request_id"] = args.request_id
+    return payload
 
 
 def cmd_recordings(args: argparse.Namespace) -> int:

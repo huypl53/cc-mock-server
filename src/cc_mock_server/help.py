@@ -269,7 +269,17 @@ COMMANDS: tuple[CommandSpec, ...] = (
         name="respond",
         summary="Resolve a pending `agent_mode=pending` request discovered via `pending` (D1/D2).",
         params=(
-            ParamSpec(name="request_id", flag="--request-id", required=True, help="The `request_id` from `pending`."),
+            ParamSpec(
+                name="request_id",
+                flag="--request-id",
+                help=(
+                    "The `request_id` from `pending`. OPTIONAL: omit it and cc-mock "
+                    "auto-targets the single in-flight pending request (only pass it "
+                    "when several are pending at once). Omitting it lets you answer "
+                    "with one inline command -- no need to capture an id into a shell "
+                    "variable."
+                ),
+            ),
             ParamSpec(name="status", flag="--status", type="int", default="200", help="HTTP status code to send back."),
             ParamSpec(
                 name="json",
@@ -293,16 +303,21 @@ COMMANDS: tuple[CommandSpec, ...] = (
                 ),
             ),
         ),
-        example='cc-mock respond --request-id 3fa2c1 --status 200 --json \'{"result": "ok"}\'',
+        example='cc-mock respond --status 200 --json \'{"result": "ok"}\'',
         response_shape='200 JSON: {"request_id": "3fa2c1", "resolved": true}',
-        error_codes=("404 unknown or already-resolved request_id",),
+        error_codes=(
+            "404 no pending requests (or unknown/already-resolved request_id)",
+            "409 several requests pending -- pass --request-id to disambiguate",
+        ),
         workflow_note=(
-            "Workflow: poll `pending` to discover in-flight requests, then call "
-            "`respond` with the same `request_id` for each one you want to answer. "
-            "For a streaming (SSE) endpoint, answer with one or more --chunk instead "
-            "of --json: e.g. `respond --request-id ID --chunk 'data: {\"delta\":\"hi\"}' "
-            "--chunk 'data: [DONE]'`. The response is recorded as a stream and replays "
-            "identically without you being called again."
+            "Workflow: `cc-mock pending` shows what is blocked; then `respond` "
+            "answers it. Prefer ONE inline command with no --request-id -- cc-mock "
+            "auto-targets the sole pending request, so you never capture an id into "
+            "a shell variable (which breaks multi-line bash in some harnesses): "
+            "`cc-mock respond --json '{\"result\": \"ok\"}'`. For a streaming (SSE) "
+            "endpoint use one or more --chunk instead of --json: "
+            "`cc-mock respond --chunk 'data: {\"delta\":\"hi\"}' --chunk 'data: [DONE]'`. "
+            "Only pass --request-id when several requests are pending at once."
         ),
     ),
     CommandSpec(

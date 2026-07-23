@@ -58,7 +58,12 @@ class SelectRequest(BaseModel):
 
 
 class RespondRequest(BaseModel):
-    request_id: str
+    #: Optional: when omitted, `/mock/respond` auto-targets the single
+    #: in-flight pending request (the common case -- the app is blocked on
+    #: exactly one call), so an agent never has to thread an id from
+    #: `pending` into `respond` through a shell variable. Ambiguous (>1
+    #: pending) -> 409 listing the ids so the caller can be explicit.
+    request_id: Optional[str] = None
     status: int = 200
     body: Any = None
     headers: Optional[dict[str, str]] = None
@@ -209,8 +214,27 @@ def create_control_api(application: Application) -> FastAPI:
             raise HTTPException(
                 status_code=400, detail="a stream response requires a 'chunks' list"
             )
+        request_id = body.request_id
+        if request_id is None:
+            # Auto-target the sole pending request so the caller never has to
+            # capture an id from `pending` into a shell variable (fragile in
+            # some agent harnesses). Snapshot keys once -- this handler runs
+            # on the same loop as the pending dict (D1), no lock needed.
+            pending_ids = list(application.agent_handler.pending.keys())
+            if not pending_ids:
+                raise HTTPException(status_code=404, detail="no pending requests to respond to")
+            if len(pending_ids) > 1:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"{len(pending_ids)} pending requests; pass request_id explicitly. "
+                        f"pending ids: {pending_ids}"
+                    ),
+                )
+            request_id = pending_ids[0]
+
         resolved = application.agent_handler.respond(
-            body.request_id,
+            request_id,
             body.status,
             body.body,
             headers=body.headers,
@@ -220,9 +244,9 @@ def create_control_api(application: Application) -> FastAPI:
         if not resolved:
             raise HTTPException(
                 status_code=404,
-                detail=f"unknown or already-resolved request_id: {body.request_id!r}",
+                detail=f"unknown or already-resolved request_id: {request_id!r}",
             )
-        return {"request_id": body.request_id, "resolved": True}
+        return {"request_id": request_id, "resolved": True}
 
     # ------------------------------------------------------------------
     # recordings

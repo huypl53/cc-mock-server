@@ -178,6 +178,34 @@ class TestCliRespondChunks:
         args = parser.parse_args(["respond", "--request-id", "abc"])
         assert cli.cmd_respond(args) != 0
 
+    def test_respond_omits_request_id_when_not_given(self, monkeypatch):
+        captured: dict = {}
+
+        def fake_request(args, method, path, **kwargs):
+            captured["json"] = kwargs.get("json")
+            return 0
+
+        monkeypatch.setattr(cli, "_request", fake_request)
+        parser = cli.build_arg_parser()
+        args = parser.parse_args(["respond", "--json", '{"result": "ok"}'])
+        assert cli.cmd_respond(args) == 0
+        # No --request-id -> the key must be absent so the API auto-targets.
+        assert "request_id" not in captured["json"]
+        assert captured["json"]["body"] == {"result": "ok"}
+
+    def test_respond_includes_request_id_when_given(self, monkeypatch):
+        captured: dict = {}
+
+        def fake_request(args, method, path, **kwargs):
+            captured["json"] = kwargs.get("json")
+            return 0
+
+        monkeypatch.setattr(cli, "_request", fake_request)
+        parser = cli.build_arg_parser()
+        args = parser.parse_args(["respond", "--request-id", "xyz", "--json", "{}"])
+        assert cli.cmd_respond(args) == 0
+        assert captured["json"]["request_id"] == "xyz"
+
     def test_plain_json_respond_still_works(self, monkeypatch):
         captured: dict = {}
 

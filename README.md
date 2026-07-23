@@ -87,11 +87,13 @@ cc-mock start \
 export HTTP_PROXY=http://127.0.0.1:8080
 export HTTPS_PROXY=http://127.0.0.1:8080
 
-# 3. (agent_mode=pending, the default) poll for requests waiting on you,
-#    then answer them:
+# 3. (agent_mode=pending, the default) see what's waiting on you, then
+#    answer it. Omit --request-id: cc-mock auto-targets the single blocked
+#    request, so each step is one inline command (no id copied into a shell
+#    variable -- which keeps it robust in agent/hook environments):
 cc-mock pending --control-port 8081
-cc-mock respond --request-id <id-from-pending> --status 200 \
-  --json '{"result": "ok"}' --control-port 8081
+cc-mock respond --status 200 --json '{"result": "ok"}' --control-port 8081
+#    (Pass --request-id <id> only when several requests are pending at once.)
 
 # 4. Once you have enough recordings, replay them without an agent:
 cc-mock mode replay --control-port 8081
@@ -110,7 +112,7 @@ point at a non-default instance (defaults `127.0.0.1:8081`).
 | `cc-mock select <pattern>` | Route a domain or `METHOD host/path` to the agent in live mode. |
 | `cc-mock deselect <pattern>` | Stop routing a pattern to the agent (falls back to replay/pass-through). |
 | `cc-mock pending` | List requests currently blocked waiting for `respond`. |
-| `cc-mock respond --request-id <id> --status <code> --json '<body>'` | Unblock a pending request. |
+| `cc-mock respond [--request-id <id>] --status <code> --json '<body>'` | Unblock a pending request (`--request-id` optional -- auto-targets the sole pending one). |
 | `cc-mock recordings [--delete <id>]` | List or delete recordings. |
 | `cc-mock --agent-help` | Full structured markdown reference (params, examples, response shapes, error codes) generated from the same command registry `cc-mock --help` uses -- meant to be pasted into an LLM agent's context. |
 
@@ -188,7 +190,7 @@ default. cc-mock captures these on **pass-through** and replays them:
   one or more SSE events:
 
   ```bash
-  cc-mock respond --request-id <id> \
+  cc-mock respond \
     --chunk 'data: {"choices":[{"delta":{"content":"Hel"}}]}' \
     --chunk 'data: {"choices":[{"delta":{"content":"lo"}}]}' \
     --chunk 'data: [DONE]'
